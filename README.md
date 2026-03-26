@@ -2,8 +2,6 @@
 
 A lightweight, multi-threaded KV storage server written in Rust — built from scratch for systems programming practice.
 
-FerrumKV implements a simple text-based protocol over TCP, supporting basic key-value operations like `SET`, `GET`, `DEL`, and `PING`.
-
 ## Architecture
 
 ```mermaid
