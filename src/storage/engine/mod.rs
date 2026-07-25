@@ -39,6 +39,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use crate::error::FerrumError;
+use crate::network::monitor::MonitorRegistry;
 use crate::persistence::AofWriter;
 use crate::storage::adaptive_climb::AdaptiveClimbState;
 use crate::storage::engine::entry::ValueEntry;
@@ -174,6 +175,9 @@ pub struct KvEngine {
     /// Cumulative keys removed by TTL expiration (active + lazy sweeps).
     /// Exposed as `expired_keys` in `INFO stats`.
     pub(crate) expired_keys: Arc<AtomicU64>,
+    /// Registry of active MONITOR clients. Shared via `Arc` so every
+    /// engine clone broadcasts to the same set of subscribers.
+    pub(crate) monitor_registry: MonitorRegistry,
 }
 
 /// One recorded slow command.
@@ -226,6 +230,7 @@ impl KvEngine {
             total_commands: Arc::new(AtomicU64::new(0)),
             evicted_keys: Arc::new(AtomicU64::new(0)),
             expired_keys: Arc::new(AtomicU64::new(0)),
+            monitor_registry: MonitorRegistry::default(),
         }
     }
 

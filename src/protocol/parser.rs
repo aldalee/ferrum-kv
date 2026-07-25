@@ -75,6 +75,9 @@ pub enum Command {
     /// `+OK` immediately. Only meaningful when AOF persistence is enabled;
     /// takes no arguments.
     RewriteAof,
+    /// `MONITOR` — stream every processed command to this client in real
+    /// time, matching Redis' debug/monitoring feature. Takes no arguments.
+    Monitor,
 }
 
 impl Command {
@@ -171,6 +174,7 @@ impl Command {
                 v
             }
             Command::RewriteAof => vec![b"BGREWRITEAOF".to_vec()],
+            Command::Monitor => vec![b"MONITOR".to_vec()],
         }
     }
 }
@@ -682,6 +686,12 @@ fn build_command(parts: Vec<Vec<u8>>) -> Result<Command, FerrumError> {
                 });
             }
             Ok(Command::RewriteAof)
+        }
+        b"MONITOR" => {
+            if !args.is_empty() {
+                return Err(FerrumError::WrongArity { cmd: "MONITOR" });
+            }
+            Ok(Command::Monitor)
         }
         _ => Err(FerrumError::UnknownCommand(
             String::from_utf8_lossy(&name).into_owned(),

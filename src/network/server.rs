@@ -10,6 +10,7 @@ use tokio::runtime::Builder;
 use tokio::time::timeout;
 
 use crate::error::FerrumError;
+use crate::network::monitor::MonitorMessage;
 use crate::network::shutdown::Shutdown;
 use crate::protocol::encoder;
 use crate::protocol::parser::{self, Command, FrameParse};
@@ -197,6 +198,17 @@ async fn handle_client(
                         if auth_reply(&engine, password, &mut outbuf) {
                             authed = true;
                         }
+                    } else if matches!(&command, Command::Monitor) {
+                        // MONITOR bypasses the normal execute→write cycle
+                        // and enters a dedicated event loop.
+                        encoder::encode_simple_string(&mut outbuf, "OK");
+                        if let Err(e) = stream.write_all(&outbuf).await {
+                            error!("write failed for {peer}: {e}");
+                            return Err(e.into());
+                        }
+                        inbuf.drain(..consumed);
+                        let mut rx = engine.monitor_registry.subscribe();
+                        return run_monitor_loop(stream, peer, &mut rx, shutdown).await;
                     } else if requires_auth && !authed {
                         encoder::encode_error(&mut outbuf, "NOAUTH Authentication required.");
                     } else {
@@ -310,6 +322,22 @@ pub fn execute_command(
     engine
         .total_commands
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    // Broadcast to MONITOR clients — skip meta/observability commands
+    // that would create noise loops (SLOWLOG, MONITOR itself).
+    let monitor_meta = matches!(
+        cmd,
+        Command::SlowLog { .. } | Command::RewriteAof | Command::Monitor
+    );
+    if !monitor_meta {
+        let args = cmd.args();
+        if !args.is_empty() {
+            engine.monitor_registry.send(MonitorMessage {
+                timestamp_ms: current_epoch_ms(),
+                peer: client.unwrap_or(SocketAddr::from(([0, 0, 0, 0], 0))),
+                args,
+            });
+        }
+    }
     let start = Instant::now();
     match cmd {
         Command::Set { key, value } => match engine.set(key, value) {
@@ -465,6 +493,10 @@ pub fn execute_command(
             Ok(()) => encoder::encode_simple_string(out, "OK"),
             Err(e) => write_ferrum_error(out, &e),
         },
+        // Handled in `handle_client`; never reaches here.
+        Command::Monitor => {
+            encoder::encode_error(out, "ERR internal: MONITOR handled by connection layer");
+        }
     }
     // Slow-log: record the command only if it crossed the threshold. The
     // snapshot is `None` (and no clock was read) when logging is disabled.
@@ -505,6 +537,42 @@ fn encode_slowlog_entries(out: &mut Vec<u8>, entries: &[SlowLogEntry]) {
 /// Only the `server` and `memory` sections are currently populated, plus a
 /// small `keyspace` summary that mirrors Redis' `db0` line. Unknown sections
 /// return an empty body, matching Redis' behaviour.
+/// Dedicated loop for a MONITOR client. Receives command snapshots from
+/// the registry and writes them as RESP simple strings to the socket.
+/// Exits when the shutdown signal fires or the client disconnects.
+async fn run_monitor_loop(
+    mut stream: TcpStream,
+    _peer: SocketAddr,
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<MonitorMessage>,
+    shutdown: Shutdown,
+) -> Result<(), FerrumError> {
+    let mut out = Vec::new();
+    loop {
+        tokio::select! {
+            biased;
+            _ = shutdown.notified() => break,
+            msg = rx.recv() => {
+                let Some(msg) = msg else { break }; // sender dropped
+                out.clear();
+                // Format: +<timestamp_ms> [<peer>] "<cmd>" "<arg>"...\r\n
+                let ts = msg.timestamp_ms;
+                let peer_str = msg.peer.to_string();
+                let args_quoted: Vec<String> = msg
+                    .args
+                    .iter()
+                    .map(|a| format!("\"{}\"", String::from_utf8_lossy(a)))
+                    .collect();
+                let line = format!("+{ts} [{peer_str}] {}\r\n", args_quoted.join(" "));
+                out.extend_from_slice(line.as_bytes());
+                if stream.write_all(&out).await.is_err() {
+                    break;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn render_info(engine: &KvEngine, section: Option<&[u8]>) -> String {
     let wants = |name: &str| match section {
         None => true,
