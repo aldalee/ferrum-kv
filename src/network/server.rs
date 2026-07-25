@@ -307,6 +307,9 @@ pub fn execute_command(
     // SLOWLOG is a meta/observability command; it must not pollute its
     // own ring (a RESET would otherwise re-log itself and never clear).
     let is_slowlog_meta = matches!(cmd, Command::SlowLog { .. } | Command::RewriteAof);
+    engine
+        .total_commands
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let start = Instant::now();
     match cmd {
         Command::Set { key, value } => match engine.set(key, value) {
@@ -537,8 +540,14 @@ fn render_info(engine: &KvEngine, section: Option<&[u8]>) -> String {
     if wants("stats") {
         let (hits, misses) = engine.keyspace_stats();
         out.push_str("# Stats\r\n");
+        out.push_str(&format!(
+            "total_commands_processed:{}\r\n",
+            engine.total_commands_processed()
+        ));
         out.push_str(&format!("keyspace_hits:{hits}\r\n"));
         out.push_str(&format!("keyspace_misses:{misses}\r\n"));
+        out.push_str(&format!("evicted_keys:{}\r\n", engine.evicted_keys()));
+        out.push_str(&format!("expired_keys:{}\r\n", engine.expired_keys()));
         out.push_str("\r\n");
     }
     if wants("keyspace") {

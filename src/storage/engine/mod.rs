@@ -165,6 +165,15 @@ pub struct KvEngine {
     /// gets a stable, ever-increasing identifier regardless of which
     /// connection logged it.
     pub(crate) slowlog_seq: Arc<AtomicU64>,
+    /// Cumulative commands processed (all commands, all connections).
+    /// Exposed as `total_commands_processed` in `INFO stats`.
+    pub(crate) total_commands: Arc<AtomicU64>,
+    /// Cumulative keys evicted by the maxmemory eviction policy.
+    /// Exposed as `evicted_keys` in `INFO stats`.
+    pub(crate) evicted_keys: Arc<AtomicU64>,
+    /// Cumulative keys removed by TTL expiration (active + lazy sweeps).
+    /// Exposed as `expired_keys` in `INFO stats`.
+    pub(crate) expired_keys: Arc<AtomicU64>,
 }
 
 /// One recorded slow command.
@@ -214,6 +223,9 @@ impl KvEngine {
             slowlog_max_len: Arc::new(AtomicU64::new(128)),
             slowlog: Arc::new(Mutex::new(VecDeque::new())),
             slowlog_seq: Arc::new(AtomicU64::new(0)),
+            total_commands: Arc::new(AtomicU64::new(0)),
+            evicted_keys: Arc::new(AtomicU64::new(0)),
+            expired_keys: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -816,6 +828,7 @@ impl KvEngine {
         let evicted = victims.len();
         for key in &victims {
             self.track_remove(&mut store, key.as_slice());
+            self.expired_keys.fetch_add(1, Ordering::Relaxed);
             if let Some(aof) = &self.aof {
                 log_aof_result("DEL", aof.append_del(key));
             }
@@ -951,6 +964,7 @@ impl KvEngine {
             };
             self.track_remove(store, &victim_key);
             evicted += 1;
+            self.evicted_keys.fetch_add(1, Ordering::Relaxed);
             if let Some(aof) = &self.aof {
                 log_aof_result("DEL", aof.append_del(&victim_key));
             }
@@ -1229,6 +1243,21 @@ impl KvEngine {
         )
     }
 
+    /// Total commands processed (all commands, all connections).
+    pub fn total_commands_processed(&self) -> u64 {
+        self.total_commands.load(Ordering::Relaxed)
+    }
+
+    /// Cumulative evictions by the maxmemory policy.
+    pub fn evicted_keys(&self) -> u64 {
+        self.evicted_keys.load(Ordering::Relaxed)
+    }
+
+    /// Cumulative keys removed by TTL expiration.
+    pub fn expired_keys(&self) -> u64 {
+        self.expired_keys.load(Ordering::Relaxed)
+    }
+
     /// Returns a copy of the live AHE controller state. Intended for
     /// observability; callers must not rely on values being stable across
     /// consecutive reads since the controller mutates during evictions.
@@ -1474,6 +1503,79 @@ mod slowlog_tests {
         e.maybe_push_slowlog(set_args(), None, 1);
         let entries = e.slowlog_get(None);
         assert_eq!(entries[0].peer, SocketAddr::from(([0, 0, 0, 0], 0)));
+    }
+}
+
+#[cfg(test)]
+mod info_fields_tests {
+    use super::*;
+    use crate::storage::eviction::{EvictionConfig, EvictionPolicy};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn total_commands_initial_value_is_zero() {
+        let e = KvEngine::new();
+        assert_eq!(e.total_commands_processed(), 0);
+    }
+
+    #[test]
+    fn evicted_keys_initial_value_is_zero() {
+        let e = KvEngine::new();
+        assert_eq!(e.evicted_keys(), 0);
+    }
+
+    #[test]
+    fn expired_keys_initial_value_is_zero() {
+        let e = KvEngine::new();
+        assert_eq!(e.expired_keys(), 0);
+    }
+
+    /// Evict a key by setting maxmemory very low, then assert the counter
+    /// reflects the eviction.
+    #[test]
+    fn evicted_keys_increments_on_maxmemory_eviction() {
+        let e = KvEngine::new();
+        // 30 bytes of overhead + value; set maxmemory to 1 to force eviction
+        // of the first key when the second is inserted.
+        e.set_eviction_config(EvictionConfig {
+            max_memory: 60,
+            policy: EvictionPolicy::AllKeysRandom,
+            samples: 1,
+        })
+        .unwrap();
+        e.set(b"a".to_vec(), b"1".to_vec()).unwrap();
+        assert_eq!(e.evicted_keys(), 0);
+        // Second insert must evict "a" because maxmemory is too tight.
+        e.set(b"b".to_vec(), b"2".to_vec()).unwrap();
+        assert!(
+            e.evicted_keys() >= 1,
+            "evicted_keys should be at least 1 after a forced eviction"
+        );
+    }
+
+    /// Mark a key as manually expired, then sweep and assert
+    /// expired_keys is incremented.
+    #[test]
+    fn expired_keys_increments_on_ttl_expiry() {
+        let e = KvEngine::new();
+        e.set(b"a".to_vec(), b"1".to_vec()).unwrap();
+        // Manually mark the key as expired (expire_at_ms would delete
+        // it immediately when the epoch is in the past).
+        {
+            let mut store = e.store.write().unwrap();
+            if let Some(entry) = store.get_mut("a".as_bytes()) {
+                entry.expire_at = Some(Instant::now() - Duration::from_secs(60));
+            }
+        }
+        // The background sweeper samples up to 32 keys; with only one
+        // key in the store it must find it.
+        let s = e.sweep_expired(32).unwrap();
+        assert_eq!(s.evicted, 1, "sweep must remove the manually-expired key");
+        assert_eq!(
+            e.expired_keys(),
+            1,
+            "expired_keys must reflect the sweeper removal"
+        );
     }
 }
 
