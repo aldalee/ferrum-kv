@@ -78,6 +78,9 @@ pub enum Command {
     /// `MONITOR` — stream every processed command to this client in real
     /// time, matching Redis' debug/monitoring feature. Takes no arguments.
     Monitor,
+    /// `HELLO [version]` — RESP3 protocol handshake. Sets the connection
+    /// protocol version for subsequent commands. Returns server metadata.
+    Hello { version: Option<u8> },
 }
 
 impl Command {
@@ -175,6 +178,10 @@ impl Command {
             }
             Command::RewriteAof => vec![b"BGREWRITEAOF".to_vec()],
             Command::Monitor => vec![b"MONITOR".to_vec()],
+            Command::Hello { version } => match version {
+                None => vec![b"HELLO".to_vec()],
+                Some(v) => vec![b"HELLO".to_vec(), v.to_string().into_bytes()],
+            },
         }
     }
 }
@@ -692,6 +699,24 @@ fn build_command(parts: Vec<Vec<u8>>) -> Result<Command, FerrumError> {
                 return Err(FerrumError::WrongArity { cmd: "MONITOR" });
             }
             Ok(Command::Monitor)
+        }
+        b"HELLO" => {
+            if args.is_empty() {
+                return Ok(Command::Hello { version: None });
+            }
+            if args.len() > 1 {
+                return Err(FerrumError::WrongArity { cmd: "HELLO" });
+            }
+            let version = match std::str::from_utf8(&args[0]) {
+                Ok("2") => Some(2u8),
+                Ok("3") => Some(3u8),
+                _ => {
+                    return Err(FerrumError::ParseError(
+                        "NOPROTO unsupported protocol version".into(),
+                    ));
+                }
+            };
+            Ok(Command::Hello { version })
         }
         _ => Err(FerrumError::UnknownCommand(
             String::from_utf8_lossy(&name).into_owned(),

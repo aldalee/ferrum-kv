@@ -159,7 +159,7 @@ async fn handle_client(
     let mut authed = false;
     // Per-connection protocol version. Defaults to RESP2; upgraded to
     // RESP3 when the client issues a successful `HELLO 3` handshake.
-    let version = ProtocolVersion::default();
+    let mut version = ProtocolVersion::default();
 
     loop {
         if shutdown.is_triggered() {
@@ -202,6 +202,18 @@ async fn handle_client(
                         if auth_reply(&engine, password, &mut outbuf) {
                             authed = true;
                         }
+                    } else if let Command::Hello {
+                        version: proto_version,
+                    } = &command
+                    {
+                        if let Some(v) = proto_version {
+                            version = match v {
+                                2 => ProtocolVersion::Resp2,
+                                3 => ProtocolVersion::Resp3,
+                                _ => version,
+                            };
+                        }
+                        hello_reply(&mut outbuf, version);
                     } else if matches!(&command, Command::Monitor) {
                         // MONITOR bypasses the normal execute→write cycle
                         // and enters a dedicated event loop.
@@ -502,6 +514,9 @@ pub fn execute_command(
         Command::Monitor => {
             encoder::encode_error(out, "ERR internal: MONITOR handled by connection layer");
         }
+        Command::Hello { .. } => {
+            encoder::encode_error(out, "ERR internal: HELLO handled by connection layer");
+        }
     }
     // Slow-log: record the command only if it crossed the threshold. The
     // snapshot is `None` (and no clock was read) when logging is disabled.
@@ -576,6 +591,29 @@ async fn run_monitor_loop(
         }
     }
     Ok(())
+}
+
+/// Encodes the `HELLO` reply as a RESP2 array of key-value pairs.
+///
+/// Mirrors Redis' HELLO response: server name, version, protocol version,
+/// and operating mode. Will be upgraded to native RESP3 map encoding in
+/// P-02 when the protocol version is RESP3.
+fn hello_reply(out: &mut Vec<u8>, version: ProtocolVersion) {
+    let proto_num: u8 = match version {
+        ProtocolVersion::Resp2 => 2,
+        ProtocolVersion::Resp3 => 3,
+    };
+    // RESP2 array of 6 bulk strings: server/ferrum/version/X.Y.Z/proto/N
+    // plus 2 more for mode/standalone = 8 elements total.
+    encoder::encode_array_header(out, 8);
+    encoder::encode_bulk_string(out, b"server");
+    encoder::encode_bulk_string(out, b"ferrum");
+    encoder::encode_bulk_string(out, b"version");
+    encoder::encode_bulk_string(out, env!("CARGO_PKG_VERSION").as_bytes());
+    encoder::encode_bulk_string(out, b"proto");
+    encoder::encode_integer(out, proto_num as i64);
+    encoder::encode_bulk_string(out, b"mode");
+    encoder::encode_bulk_string(out, b"standalone");
 }
 
 fn render_info(engine: &KvEngine, section: Option<&[u8]>) -> String {
