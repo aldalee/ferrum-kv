@@ -16,6 +16,7 @@ use tokio::net::TcpStream;
 use crate::error::FerrumError;
 use crate::network::server::execute_command;
 use crate::network::shutdown::Shutdown;
+use crate::protocol::ProtocolVersion;
 use crate::protocol::parser::{self, FrameParse};
 use crate::storage::engine::{KvEngine, TtlStatus};
 
@@ -297,7 +298,7 @@ fn run_command(engine: &KvEngine, body: &[u8]) -> Response {
     };
 
     let mut out = Vec::new();
-    execute_command(parsed, engine, None, &mut out);
+    execute_command(parsed, engine, None, &mut out, ProtocolVersion::default());
     let response = decode_resp(&out);
     Response::ok_json(format!(
         "{{\"ok\":true,\"response\":{}}}",

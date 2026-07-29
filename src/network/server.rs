@@ -12,6 +12,7 @@ use tokio::time::timeout;
 use crate::error::FerrumError;
 use crate::network::monitor::MonitorMessage;
 use crate::network::shutdown::Shutdown;
+use crate::protocol::ProtocolVersion;
 use crate::protocol::encoder;
 use crate::protocol::parser::{self, Command, FrameParse};
 use crate::storage::engine::{KvEngine, SlowLogEntry, TtlStatus, current_epoch_ms};
@@ -156,6 +157,9 @@ async fn handle_client(
     // so that authentication survives across packet boundaries and pipelined
     // commands.
     let mut authed = false;
+    // Per-connection protocol version. Defaults to RESP2; upgraded to
+    // RESP3 when the client issues a successful `HELLO 3` handshake.
+    let version = ProtocolVersion::default();
 
     loop {
         if shutdown.is_triggered() {
@@ -212,7 +216,7 @@ async fn handle_client(
                     } else if requires_auth && !authed {
                         encoder::encode_error(&mut outbuf, "NOAUTH Authentication required.");
                     } else {
-                        execute_command(command, &engine, Some(peer), &mut outbuf);
+                        execute_command(command, &engine, Some(peer), &mut outbuf, version);
                     }
                     if let Err(e) = stream.write_all(&outbuf).await {
                         error!("write failed for {peer}: {e}");
@@ -306,6 +310,7 @@ pub fn execute_command(
     engine: &KvEngine,
     client: Option<SocketAddr>,
     out: &mut Vec<u8>,
+    _version: ProtocolVersion,
 ) {
     // Snapshot the command's RESP args *before* the consuming `match` (NLL
     // lets a borrow precede the move), and time the whole dispatch. The
