@@ -322,8 +322,19 @@ pub fn execute_command(
     engine: &KvEngine,
     client: Option<SocketAddr>,
     out: &mut Vec<u8>,
-    _version: ProtocolVersion,
+    version: ProtocolVersion,
 ) {
+    // Helper closures for version-dispatch encoding. The common RESP2
+    // functions (simple_string, error, integer, bulk_string, array_header)
+    // are identical across versions and use encoder::* directly.
+    let enc_null = |out: &mut Vec<u8>| match version {
+        ProtocolVersion::Resp2 => encoder::encode_null_bulk(out),
+        ProtocolVersion::Resp3 => encoder::encode_null(out),
+    };
+    let enc_bool = |out: &mut Vec<u8>, v: bool| match version {
+        ProtocolVersion::Resp2 => encoder::encode_integer(out, v as i64),
+        ProtocolVersion::Resp3 => encoder::encode_boolean(out, v),
+    };
     // Snapshot the command's RESP args *before* the consuming `match` (NLL
     // lets a borrow precede the move), and time the whole dispatch. The
     // snapshot is taken only when the slow-log is active, so a disabled log
@@ -362,8 +373,8 @@ pub fn execute_command(
             Err(e) => write_ferrum_error(out, &e),
         },
         Command::SetNx { key, value } => match engine.set_nx(key, value) {
-            Ok(true) => encoder::encode_integer(out, 1),
-            Ok(false) => encoder::encode_integer(out, 0),
+            Ok(true) => enc_bool(out, true),
+            Ok(false) => enc_bool(out, false),
             Err(e) => write_ferrum_error(out, &e),
         },
         Command::MSet { pairs } => match engine.mset(pairs) {
@@ -376,7 +387,7 @@ pub fn execute_command(
                 for value in values {
                     match value {
                         Some(v) => encoder::encode_bulk_string(out, &v),
-                        None => encoder::encode_null_bulk(out),
+                        None => enc_null(out),
                     }
                 }
             }
@@ -428,13 +439,13 @@ pub fn execute_command(
             write_bool_integer(out, reply);
         }
         Command::PExpireAt { key, abs_epoch_ms } => match engine.expire_at_ms(&key, abs_epoch_ms) {
-            Ok(true) => encoder::encode_integer(out, 1),
-            Ok(false) => encoder::encode_integer(out, 0),
+            Ok(true) => enc_bool(out, true),
+            Ok(false) => enc_bool(out, false),
             Err(e) => write_ferrum_error(out, &e),
         },
         Command::Persist { key } => match engine.persist(&key) {
-            Ok(true) => encoder::encode_integer(out, 1),
-            Ok(false) => encoder::encode_integer(out, 0),
+            Ok(true) => enc_bool(out, true),
+            Ok(false) => enc_bool(out, false),
             Err(e) => write_ferrum_error(out, &e),
         },
         Command::Ttl { key } => match engine.ttl_ms(&key) {
@@ -593,19 +604,21 @@ async fn run_monitor_loop(
     Ok(())
 }
 
-/// Encodes the `HELLO` reply as a RESP2 array of key-value pairs.
-///
-/// Mirrors Redis' HELLO response: server name, version, protocol version,
-/// and operating mode. Will be upgraded to native RESP3 map encoding in
-/// P-02 when the protocol version is RESP3.
+/// Encodes the `HELLO` reply — RESP2 array or RESP3 map depending on version.
 fn hello_reply(out: &mut Vec<u8>, version: ProtocolVersion) {
     let proto_num: u8 = match version {
         ProtocolVersion::Resp2 => 2,
         ProtocolVersion::Resp3 => 3,
     };
-    // RESP2 array of 6 bulk strings: server/ferrum/version/X.Y.Z/proto/N
-    // plus 2 more for mode/standalone = 8 elements total.
-    encoder::encode_array_header(out, 8);
+    match version {
+        ProtocolVersion::Resp2 => {
+            encoder::encode_array_header(out, 8);
+        }
+        ProtocolVersion::Resp3 => {
+            // RESP3 map with 4 key-value pairs
+            encoder::encode_map_header(out, 4);
+        }
+    }
     encoder::encode_bulk_string(out, b"server");
     encoder::encode_bulk_string(out, b"ferrum");
     encoder::encode_bulk_string(out, b"version");

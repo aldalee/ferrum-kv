@@ -1,13 +1,9 @@
-//! RESP2 response encoder.
+//! RESP2 and RESP3 response encoder.
 //!
-//! Each function appends one RESP2 reply element to the caller-supplied
-//! buffer. Callers compose a full response by issuing writes on a single
-//! [`Vec<u8>`] and flushing it to the socket in one `write_all` call, which
-//! matches how Redis serialises replies and avoids per-element syscalls.
-//!
-//! The encoder is deliberately byte-oriented: bulk payloads take `&[u8]` so
-//! that binary values survive round-trips unchanged, including values that
-//! embed `\r\n`.
+//! The RESP2 functions (prefixed with a `+`, `-`, `:`, `$`, `*`) are used
+//! for RESP2 clients. The RESP3 functions (`_`, `#`, `,`, `%`, `~`) provide
+//! richer typed replies. A version-aware wrapper in `ReplyEncoder` dispatches
+//! based on the per-connection protocol version.
 
 /// Appends a RESP2 Simple String (`+<text>\r\n`).
 ///
@@ -79,6 +75,48 @@ pub fn encode_null_bulk(buf: &mut Vec<u8>) {
 /// heterogeneous sequence of bulk strings and null bulks.
 pub fn encode_array_header(buf: &mut Vec<u8>, count: usize) {
     buf.push(b'*');
+    buf.extend_from_slice(count.to_string().as_bytes());
+    buf.extend_from_slice(b"\r\n");
+}
+
+// ── RESP3 typed replies ──────────────────────────────────────────────
+
+/// Appends a RESP3 Null (`_\r\n`). Replaces `$-1\r\n` when the protocol
+/// version is RESP3.
+pub fn encode_null(buf: &mut Vec<u8>) {
+    buf.extend_from_slice(b"_\r\n");
+}
+
+/// Appends a RESP3 Boolean (`#t\r\n` or `#f\r\n`). Replaces `:1\r\n` and
+/// `:0\r\n` when the protocol version is RESP3.
+pub fn encode_boolean(buf: &mut Vec<u8>, v: bool) {
+    if v {
+        buf.extend_from_slice(b"#t\r\n");
+    } else {
+        buf.extend_from_slice(b"#f\r\n");
+    }
+}
+
+/// Appends a RESP3 Double (`,<value>\r\n`). The value is formatted with
+/// enough precision to round-trip without loss.
+#[allow(dead_code)]
+pub fn encode_double(buf: &mut Vec<u8>, v: f64) {
+    buf.push(b',');
+    buf.extend_from_slice(format!("{v:.17}").trim_end_matches('0').as_bytes());
+    // If the trimmed result ends with '.', append a '0'.
+    if buf.last() == Some(&b'.') {
+        buf.push(b'0');
+    }
+    buf.extend_from_slice(b"\r\n");
+}
+
+/// Appends a RESP3 Map header (`%<count>\r\n`).
+///
+/// `count` is the number of key-value **pairs**, so the caller must follow
+/// with `2 * count` further elements. Use this for `HELLO` and structured
+/// `INFO` output.
+pub fn encode_map_header(buf: &mut Vec<u8>, count: usize) {
+    buf.push(b'%');
     buf.extend_from_slice(count.to_string().as_bytes());
     buf.extend_from_slice(b"\r\n");
 }
