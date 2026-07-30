@@ -3,7 +3,8 @@ layout: home
 
 hero:
   name: FerrumKV
-  text: A readable KV store with 16 eviction policies
+  text: Eviction Algorithm Laboratory
+  tagline: Study, benchmark, and experiment with 16 cache eviction strategies — wrapped in a RESP2-compatible KV store.
   actions:
     - theme: brand
       text: Get Started

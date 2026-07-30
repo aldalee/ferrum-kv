@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hero.svg" width="100%" alt="FerrumKV — Eviction algorithm laboratory" />
+  <img src="assets/hero.svg" width="100%" alt="FerrumKV — Eviction Algorithm Laboratory" />
 </p>
 
 <p align="center">
@@ -10,6 +10,42 @@
 </p>
 
 ---
+
+## What is FerrumKV?
+
+FerrumKV is an **eviction algorithm laboratory** — a place to study,
+benchmark, and experiment with cache eviction strategies. It wraps 16
+policies (from classic LRU to the self-tuning AHE) in a working,
+RESP2-compatible KV store you can drive with `redis-cli`.
+
+It is **not** a Redis replacement. It is a research vehicle: every
+algorithm ships with reproducible benchmarks, every code path is
+commented, and the entire ~8,500-line codebase is designed to be read
+in an afternoon.
+
+Three principles guide the project:
+
+**🔬 Algorithms first.**
+[AHE](./docs/reference/ahe.md) (Adaptive Hybrid Eviction) fuses recency,
+frequency, and TTL into a single *Eviction Priority Score* and self-tunes
+its weights from live hit-ratio feedback. No knobs, no tuning — swap it
+in with `--maxmemory-policy allkeys-ahe` and it adapts. SIEVE (NSDI'24),
+SIEVE-S, AdaptiveClimb, and 10 more policies ship alongside it, all
+benchmarked against the same workload suite.
+
+**📖 Readable end-to-end.**
+~8,500 lines of layered, well-commented Rust — no macro magic, no custom
+allocators. TCP → RESP2 parsing → engine → eviction → AOF → Tokio async:
+the whole pipeline is followable in an afternoon.
+
+**🔧 Self-contained and Redis-flavoured.**
+A single static binary, RESP2-compatible, driven by `redis-cli` and
+`redis-benchmark`. 16 eviction policies you can swap at runtime, plus a
+zero-dependency web dashboard.
+
+<p align="center">
+  <img src="assets/section-divider.svg" width="80%" alt="" />
+</p>
 
 ## Quick Start
 
@@ -41,30 +77,30 @@ maxmemory:268435456
 
 Open **http://127.0.0.1:6381** for the built-in dashboard.
 
-<p align="center">
-  <img src="assets/section-divider.svg" width="80%" alt="" />
-</p>
+## The Eviction Laboratory
 
-## Why FerrumKV
+Cache eviction has seen a renaissance since 2024. SIEVE (NSDI'24)
+showed that a simple FIFO-derived algorithm can beat 9 state-of-the-art
+policies on nearly half of 1,559 production traces. AdaptiveClimb
+(arXiv:2511.21235) brought control theory to cache replacement. Cold-RL
+put reinforcement learning on the table.
 
-FerrumKV is built to be **read, learned from, and experimented with** —
-it does not try to replace Redis in production. Three things set it apart:
+FerrumKV tracks this frontier. Every policy ships with a shared benchmark
+harness that measures hit ratio across four workload patterns — Zipfian
+(stable skew), shifting hot set, OLTP-mixed, and sequential scan. Switch
+policies at runtime with `CONFIG SET maxmemory-policy` and compare results
+immediately. No restart, no redeploy.
 
-**A self-tuning eviction algorithm.**
-[AHE](./docs/reference/ahe.md) (Adaptive Hybrid Eviction) fuses recency,
-frequency, and TTL into a single *Eviction Priority Score* and self-tunes
-its weights from live hit-ratio feedback. No knobs, no tuning — swap it in
-with `--maxmemory-policy allkeys-ahe` and it adapts.
+**AHE** is FerrumKV's flagship: it blends recency, frequency, and TTL into
+a self-tuning *Eviction Priority Score*. On every workload pattern it
+tracks the better of LRU and LFU, and it never hits either policy's worst
+case. LFU's sticky frequency counters collapse to **51.1%** on a shifting
+hot set while AHE holds at **52.3%**; under a scan-heavy mix AHE
+(**56.8%**) stays clear of LRU's dip to **56.3%**.
 
-**Readable end-to-end.**
-~8,500 lines of layered, well-commented Rust — no macro magic, no custom
-allocators. From TCP → RESP2 parsing → engine → eviction → AOF → Tokio
-async, the whole pipeline is followable in an afternoon.
-
-**Self-contained and Redis-flavoured.**
-A single static binary, RESP2-compatible, driven by `redis-cli` and
-`redis-benchmark`. 16 eviction policies you can swap at runtime, plus a
-zero-dependency web dashboard.
+📎 [AHE algorithm reference](./docs/reference/ahe.md) ·
+[Benchmark methodology](./docs/reference/benchmarks.md) ·
+[Reproduce: `scripts/bench-hit-ratio.sh`](scripts/bench-hit-ratio.sh)
 
 <p align="center">
   <img src="assets/section-divider.svg" width="80%" alt="" />
@@ -81,10 +117,6 @@ zero-dependency web dashboard.
 | Live stats | Keys, memory, hit ratio, eviction policy — auto-refresh every 2s |
 | Command console | Run any RESP command (`GET`, `SET`, `INFO`, …) with syntax highlighting |
 
-<p align="center">
-  <img src="assets/section-divider.svg" width="80%" alt="" />
-</p>
-
 ## Eviction Policies
 
 | Policy | Type | Recency | Frequency | TTL | Self-Tuning |
@@ -99,9 +131,9 @@ zero-dependency web dashboard.
 | **`allkeys-adaptiveclimb`** / **`volatile-adaptiveclimb`** | AdaptiveClimb (arXiv:2511.21235) | ✓ | ✓ | | ✓ |
 | **`allkeys-ahe`** / **`volatile-ahe`** | Adaptive | ✓ | ✓ | ✓ | ✓ |
 
-[AHE](./docs/reference/ahe.md) blends recency, frequency, and TTL into a
-self-tuning *Eviction Priority Score*. See the [benchmarks](#benchmarks)
-below for how it performs under load.
+Policies marked **bold** are unique to FerrumKV or adapted from recent
+research. All policies are benchmarked against the same four-pattern
+workload suite. See [benchmarks](#benchmarks) below.
 
 <p align="center">
   <img src="assets/section-divider.svg" width="80%" alt="" />
@@ -122,10 +154,10 @@ Full report: [`benches/redis-benchmark.md`](benches/redis-benchmark.md)
 
 ### Hit ratio — the metric that matters
 
-Throughput says how fast the engine serves requests. Hit ratio says how
-well the eviction algorithm keeps the working set cached. Measured
-end-to-end against a live, memory-capped server (working set **100,000
-keys**, cache capped at **5,000 entries ≈ 590 KiB**):
+Throughput tells you how fast the engine serves requests. Hit ratio
+tells you how well the eviction algorithm keeps the working set cached.
+Measured end-to-end against a live, memory-capped server (working set
+**100,000 keys**, cache capped at **5,000 entries ≈ 590 KiB**):
 
 | Policy | `zipf` (stable skew) | `shift` (rotating hot set) | `mixed` (OLTP-like) | `scan` (sequential) |
 |--------|---------------------:|---------------------------:|---------------------:|--------------------:|
@@ -143,10 +175,6 @@ of LRU's dip to **56.3%** and `random`'s **54.5%** floor.
 Method and a TTL-intensive pattern: [`docs/reference/benchmarks.md`](docs/reference/benchmarks.md).
 Reproduce: `scripts/bench-hit-ratio.sh` (harness: [`examples/hit_ratio_bench.rs`](examples/hit_ratio_bench.rs)).
 Figures vary ~±1 pp across runs (internal LFU/LRU sampling RNG seeded from wall clock).
-
-<p align="center">
-  <img src="assets/section-divider.svg" width="80%" alt="" />
-</p>
 
 ## Architecture
 
@@ -228,10 +256,6 @@ flowchart TB
     class State,AofFile config
 ```
 
-<p align="center">
-  <img src="assets/section-divider.svg" width="80%" alt="" />
-</p>
-
 ## CLI Flags
 
 | Flag | Default | Description |
@@ -250,10 +274,6 @@ flowchart TB
 | `--loglevel LEVEL` | `info` | `off` / `error` / `warn` / `info` / `debug` / `trace` |
 
 Config file: [`ferrum.conf.example`](ferrum.conf.example). All flags: `ferrum-kv --help`.
-
-<p align="center">
-  <img src="assets/section-divider.svg" width="80%" alt="" />
-</p>
 
 ## Contributing
 

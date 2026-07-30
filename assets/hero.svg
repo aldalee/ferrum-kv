@@ -1,89 +1,119 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" role="img" aria-label="FerrumKV hero">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img" aria-label="FerrumKV hero">
   <defs>
-    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6366f1"/>
-      <stop offset="1" stop-color="#22d3ee"/>
+    <!-- Forge fire gradient: amber → deep copper -->
+    <linearGradient id="forge" x1="0.2" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="35%" stop-color="#f59e0b"/>
+      <stop offset="65%" stop-color="#ea580c"/>
+      <stop offset="100%" stop-color="#c2410c"/>
     </linearGradient>
-    <linearGradient id="brand-h" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#6366f1"/>
-      <stop offset="1" stop-color="#22d3ee"/>
+    <!-- Title gradient: warm amber across -->
+    <linearGradient id="title-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="45%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
     </linearGradient>
-    <linearGradient id="card-grad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1e293b"/>
-      <stop offset="1" stop-color="#0f172a"/>
+    <!-- Separator: amber → transparent -->
+    <linearGradient id="sep" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
     </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <!-- Card background -->
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#161b22"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </linearGradient>
+
+    <!-- Glow filters -->
+    <filter id="forge-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
+    <filter id="ambient" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="48" result="blur"/>
+    </filter>
+
+    <!-- Dot grid pattern -->
+    <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="0.8" fill="#30363d"/>
+    </pattern>
   </defs>
 
   <!-- Background -->
-  <rect width="960" height="380" rx="16" fill="#0f172a"/>
+  <rect width="960" height="400" rx="12" fill="#0d1117"/>
 
-  <!-- Subtle hex grid -->
-  <g opacity="0.04" stroke="#6366f1" stroke-width="1" fill="none">
-    <polygon points="80,60 110,77 110,111 80,128 50,111 50,77"/>
-    <polygon points="200,40 230,57 230,91 200,108 170,91 170,57"/>
-    <polygon points="320,60 350,77 350,111 320,128 290,111 290,77"/>
-    <polygon points="440,40 470,57 470,91 440,108 410,91 410,57"/>
-    <polygon points="560,60 590,77 590,111 560,128 530,111 530,77"/>
-    <polygon points="680,40 710,57 710,91 680,108 650,91 650,57"/>
-    <polygon points="800,60 830,77 830,111 800,128 770,111 770,77"/>
-    <polygon points="140,150 170,167 170,201 140,218 110,201 110,167"/>
-    <polygon points="260,130 290,147 290,181 260,198 230,181 230,147"/>
-    <polygon points="380,150 410,167 410,201 380,218 350,201 350,167"/>
-    <polygon points="500,130 530,147 530,181 500,198 470,181 470,147"/>
-    <polygon points="620,150 650,167 650,201 620,218 590,201 590,167"/>
-    <polygon points="740,130 770,147 770,181 740,198 710,181 710,147"/>
-    <polygon points="860,150 890,167 890,201 860,218 830,201 830,167"/>
+  <!-- Dot grid -->
+  <rect width="960" height="400" rx="12" fill="url(#dots)" opacity="0.5"/>
+
+  <!-- Ambient warm glow behind the logo -->
+  <circle cx="120" cy="200" r="90" fill="#f59e0b" opacity="0.07" filter="url(#ambient)"/>
+
+  <!-- Logo: hexagon + keyhole mark, forge-fire gradient + glow -->
+  <g transform="translate(42, 122) scale(0.31)" filter="url(#forge-glow)">
+    <path fill="url(#forge)" fill-rule="evenodd" d="
+      M256 46 L466 171 L466 341 L256 466 L46 341 L46 171 Z
+      M210 210 a46 46 0 1 0 92 0 a46 46 0 1 0 -92 0 Z
+      M240 252 L272 252 L264 350 L248 350 Z
+    "/>
   </g>
 
-  <!-- Logo hexagon (large) -->
-  <g transform="translate(120, 95)">
-    <path fill="url(#brand)" fill-rule="evenodd" d="
-      M64 10 L115 40 L115 90 L64 120 L13 90 L13 40 Z
-      M50 50 a14 14 0 1 0 28 0 a14 14 0 1 0 -28 0 Z
-      M58 62 L70 62 L68 88 L60 88 Z
-    " filter="url(#glow)"/>
+  <!-- Spark particles — active experimentation / forging -->
+  <g opacity="0.55">
+    <circle cx="198" cy="142" r="2.5" fill="#fbbf24" opacity="0.8"/>
+    <circle cx="222" cy="175" r="1.5" fill="#f59e0b" opacity="0.55"/>
+    <circle cx="180" cy="265" r="1.8" fill="#ea580c" opacity="0.5"/>
+    <circle cx="215" cy="285" r="2.2" fill="#fbbf24" opacity="0.65"/>
+    <circle cx="192" cy="118" r="1.2" fill="#fcd34d" opacity="0.4"/>
+    <circle cx="232" cy="248" r="1.3" fill="#fb923c" opacity="0.45"/>
+    <circle cx="170" cy="195" r="1.5" fill="#f59e0b" opacity="0.3"/>
+    <circle cx="205" cy="300" r="1" fill="#fbbf24" opacity="0.35"/>
   </g>
 
   <!-- Title -->
-  <text x="270" y="145" font-family="system-ui,-apple-system,sans-serif" font-size="52" font-weight="800" letter-spacing="-1">
-    <tspan fill="url(#brand-h)">Ferrum</tspan><tspan fill="#e2e8f0">KV</tspan>
+  <text x="260" y="152" font-family="system-ui,-apple-system,sans-serif" font-size="54" font-weight="800" letter-spacing="-1.5">
+    <tspan fill="url(#title-grad)">Ferrum</tspan><tspan fill="#e6edf3">KV</tspan>
   </text>
 
   <!-- Tagline -->
-  <text x="270" y="185" font-family="system-ui,-apple-system,sans-serif" font-size="18" fill="#94a3b8" font-weight="500">
-    Eviction algorithm laboratory for RESP2-compatible KV stores
-  </text>
-  <text x="270" y="212" font-family="SF Mono,ui-monospace,monospace" font-size="13" fill="#64748b">
-    16 eviction policies  ·  built-in web dashboard  ·  written in Rust
+  <text x="260" y="196" font-family="system-ui,-apple-system,sans-serif" font-size="20" font-weight="650" fill="#e6edf3" letter-spacing="-0.2">
+    Eviction Algorithm Laboratory
   </text>
 
-  <!-- Separator line -->
-  <line x1="270" y1="238" x2="820" y2="238" stroke="url(#brand-h)" stroke-width="1" opacity="0.3"/>
+  <!-- Description -->
+  <text x="260" y="224" font-family="system-ui,-apple-system,sans-serif" font-size="13.5" fill="#8b949e">
+    Study, benchmark, and experiment with 16 cache eviction strategies
+  </text>
+  <text x="260" y="244" font-family="system-ui,-apple-system,sans-serif" font-size="13.5" fill="#8b949e">
+    — wrapped in a RESP2-compatible KV store you drive with redis-cli.
+  </text>
+
+  <!-- Separator -->
+  <line x1="260" y1="272" x2="920" y2="272" stroke="url(#sep)" stroke-width="1"/>
 
   <!-- Stat cards -->
-  <g transform="translate(270, 262)">
+  <g transform="translate(260, 296)">
     <!-- Card 1 -->
-    <rect x="0" y="0" width="130" height="64" rx="10" fill="url(#card-grad)" stroke="#334155" stroke-width="1"/>
-    <text x="65" y="26" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="22" font-weight="700" fill="url(#brand-h)">16</text>
-    <text x="65" y="48" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="11" fill="#94a3b8">Eviction Policies</text>
+    <rect x="0" y="0" width="148" height="68" rx="8" fill="url(#card)" stroke="#30363d" stroke-width="1"/>
+    <text x="74" y="28" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="24" font-weight="750" fill="url(#title-grad)">16</text>
+    <text x="74" y="50" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="11.5" fill="#8b949e">Eviction Policies</text>
 
     <!-- Card 2 -->
-    <rect x="142" y="0" width="130" height="64" rx="10" fill="url(#card-grad)" stroke="#334155" stroke-width="1"/>
-    <text x="207" y="26" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="22" font-weight="700" fill="url(#brand-h)">RESP2</text>
-    <text x="207" y="48" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="11" fill="#94a3b8">Wire Compatible</text>
+    <rect x="158" y="0" width="148" height="68" rx="8" fill="url(#card)" stroke="#30363d" stroke-width="1"/>
+    <text x="232" y="28" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="24" font-weight="750" fill="url(#title-grad)">AHE</text>
+    <text x="232" y="50" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="11.5" fill="#8b949e">Self‑Tuning Algorithm</text>
 
     <!-- Card 3 -->
-    <rect x="284" y="0" width="130" height="64" rx="10" fill="url(#card-grad)" stroke="#334155" stroke-width="1"/>
-    <text x="349" y="26" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="22" font-weight="700" fill="url(#brand-h)">~8.5K</text>
-    <text x="349" y="48" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="11" fill="#94a3b8">Lines of Rust</text>
+    <rect x="316" y="0" width="148" height="68" rx="8" fill="url(#card)" stroke="#30363d" stroke-width="1"/>
+    <text x="390" y="28" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="24" font-weight="750" fill="url(#title-grad)">RESP2</text>
+    <text x="390" y="50" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="11.5" fill="#8b949e">Wire Compatible</text>
 
     <!-- Card 4 -->
-    <rect x="426" y="0" width="130" height="64" rx="10" fill="url(#card-grad)" stroke="#334155" stroke-width="1"/>
-    <text x="491" y="26" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="22" font-weight="700" fill="url(#brand-h)">v0.5.3</text>
-    <text x="491" y="48" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="11" fill="#94a3b8">Latest Release</text>
+    <rect x="474" y="0" width="148" height="68" rx="8" fill="url(#card)" stroke="#30363d" stroke-width="1"/>
+    <text x="548" y="28" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="24" font-weight="750" fill="url(#title-grad)">🖥</text>
+    <text x="548" y="50" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="11.5" fill="#8b949e">Built‑in Dashboard</text>
   </g>
 </svg>

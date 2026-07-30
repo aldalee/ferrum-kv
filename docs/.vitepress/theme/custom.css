@@ -1,8 +1,8 @@
 :root {
-  --vp-c-brand-1: #4f46e5;
-  --vp-c-brand-2: #6366f1;
-  --vp-c-brand-3: #818cf8;
-  --vp-c-brand-soft: rgba(99, 102, 241, 0.14);
+  --vp-c-brand-1: #d97706;
+  --vp-c-brand-2: #f59e0b;
+  --vp-c-brand-3: #fbbf24;
+  --vp-c-brand-soft: rgba(245, 158, 11, 0.14);
 }
 
 /* ── Doc headings ── */
@@ -16,13 +16,13 @@
   padding: 18px;
   border: 1px solid var(--vp-divider);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(99, 102, 241, 0.06), rgba(15, 23, 42, 0.03));
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.06), rgba(15, 23, 42, 0.03));
   overflow-x: auto;
 }
 
 .dark .vp-doc .kv-diagram {
   border-color: rgba(148, 163, 184, 0.14);
-  background: linear-gradient(180deg, rgba(99, 102, 241, 0.10), rgba(15, 23, 42, 0.22));
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.10), rgba(15, 23, 42, 0.22));
 }
 
 .vp-doc .kv-diagram svg {
@@ -40,7 +40,7 @@
 .VPHero {
   text-align: center;
   position: relative;
-  padding: 76px 24px 0 !important;
+  padding: 48px 24px 0 !important;
 }
 
 .VPHero > .container {
@@ -61,13 +61,13 @@
 .VPHero::before {
   content: '';
   position: absolute;
-  top: -120px;
+  top: -80px;
   left: 50%;
   transform: translateX(-50%);
   width: min(760px, 90vw);
-  height: 520px;
+  height: 400px;
   background:
-    radial-gradient(circle at center, rgba(124, 58, 237, 0.16) 0%, rgba(99, 102, 241, 0.08) 34%, transparent 68%);
+    radial-gradient(circle at center, rgba(245, 158, 11, 0.16) 0%, rgba(245, 158, 11, 0.08) 34%, transparent 68%);
   pointer-events: none;
   z-index: 0;
 }
@@ -88,19 +88,19 @@
   font-size: clamp(56px, 7.2vw, 86px);
   font-weight: 850;
   letter-spacing: -2.8px;
-  background: linear-gradient(135deg, #7c7cff 0%, #8b5cf6 46%, #c4b5fd 100%);
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 46%, #d97706 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   line-height: 0.98;
-  filter: drop-shadow(0 18px 42px rgba(99, 102, 241, 0.18));
+  filter: drop-shadow(0 18px 42px rgba(245, 158, 11, 0.18));
 }
 
 /* ── Subtitle ── */
 .VPHero .text {
   width: fit-content;
   max-width: 720px !important;
-  margin: 22px auto 0 !important;
+  margin: 14px auto 0 !important;
   text-align: center;
   font-size: clamp(20px, 2.25vw, 25px);
   font-weight: 500;
@@ -119,11 +119,11 @@
   align-items: center;
   justify-content: center;
   max-width: 620px;
-  margin: 26px auto 0 !important;
+  margin: 16px auto 0 !important;
   padding: 12px 18px;
   border: 1px solid rgba(100, 116, 139, 0.18);
   border-radius: 999px;
-  background: rgba(99, 102, 241, 0.035);
+  background: rgba(245, 158, 11, 0.035);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
   font-size: 14px;
   font-weight: 450;
@@ -133,7 +133,7 @@
 
 .dark .VPHero .tagline {
   border-color: rgba(148, 163, 184, 0.16);
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(245, 158, 11, 0.06);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
   color: rgba(226, 232, 240, 0.64);
 }
@@ -142,14 +142,14 @@
 .VPHero .actions {
   justify-content: center;
   gap: 16px;
-  margin-top: 40px !important;
+  margin-top: 24px !important;
 }
 
 /* ══════════════════════════════════════
    FEATURE CARDS — icon-first, full-width grid
    ══════════════════════════════════════ */
 .VPFeatures {
-  padding: 56px 24px 72px !important;
+  padding: 36px 24px 48px !important;
 }
 
 .VPFeature {
@@ -186,9 +186,9 @@
 
 .VPFeature:hover {
   transform: translateY(-4px);
-  border-color: rgba(99, 102, 241, 0.35);
+  border-color: rgba(245, 158, 11, 0.35);
   box-shadow:
-    0 8px 30px rgba(79, 70, 229, 0.10),
+    0 8px 30px rgba(217, 119, 6, 0.10),
     0 2px 8px rgba(0, 0, 0, 0.06);
   background: var(--vp-c-bg);
 }

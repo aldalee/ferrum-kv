@@ -62,7 +62,7 @@ const zhNav = [
 
 export default defineConfig({
   title: 'FerrumKV',
-  description: 'Eviction algorithm laboratory for RESP2-compatible KV stores.',
+  description: 'Eviction Algorithm Laboratory — study, benchmark, and experiment with 16 cache eviction strategies.',
   base: '/ferrum-kv/',
   head: [
     ['link', { rel: 'icon', href: '/ferrum-kv/logo.svg', type: 'image/svg+xml' }],
@@ -83,6 +83,10 @@ export default defineConfig({
         socialLinks: [
           { icon: 'github', link: 'https://github.com/phaethix/ferrum-kv' },
         ],
+        footer: {
+          message: 'An eviction algorithm laboratory — study, benchmark, and experiment.',
+          copyright: 'MIT License · Copyright © 2025–2026 FerrumKV contributors',
+        },
       },
     },
     zh: {
@@ -95,6 +99,10 @@ export default defineConfig({
         socialLinks: [
           { icon: 'github', link: 'https://github.com/phaethix/ferrum-kv' },
         ],
+        footer: {
+          message: '淘汰算法实验室 — 研究、基准测试与实验。',
+          copyright: 'MIT License · Copyright © 2025–2026 FerrumKV contributors',
+        },
       },
     },
   },
