@@ -47,6 +47,8 @@ zero-dependency web dashboard.
   <img src="assets/section-divider.svg" width="80%" alt="" />
 </p>
 
+https://shipthatcode.com/courses/build-redis
+
 ## Quick Start
 
 ```bash
