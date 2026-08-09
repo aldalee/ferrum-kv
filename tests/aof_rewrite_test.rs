@@ -144,14 +144,16 @@ fn send(stream: &mut TcpStream, args: &[&[u8]]) -> Vec<u8> {
 
 fn send_with_timeout(stream: &mut TcpStream, args: &[&[u8]], timeout_dur: Duration) -> Vec<u8> {
     let req = build_request(args);
+    // Write once — re-reading on timeout is safe, but re-writing would queue
+    // a duplicate request and desynchronise the reply stream.
+    stream.write_all(&req).expect("write request");
     let deadline = Instant::now() + timeout_dur;
     loop {
-        stream.write_all(&req).expect("write request");
-        let reply = read_reply_timeout(stream, timeout_dur);
+        let reply = read_one_reply_timeout(stream, timeout_dur);
         if !reply.is_empty() {
             return reply;
         }
-        // Server not ready yet; retry until the deadline.
+        // Server not ready yet (startup race); retry until the deadline.
         assert!(
             Instant::now() < deadline,
             "server did not reply within {:?}",
@@ -161,11 +163,14 @@ fn send_with_timeout(stream: &mut TcpStream, args: &[&[u8]], timeout_dur: Durati
     }
 }
 
-fn read_reply_timeout(stream: &mut TcpStream, timeout_dur: Duration) -> Vec<u8> {
+/// Reads exactly one RESP2 reply frame, waiting at most `timeout_dur` for
+/// the first byte. Returns an empty vec when nothing arrives in time
+/// (server still starting up).
+fn read_one_reply_timeout(stream: &mut TcpStream, timeout_dur: Duration) -> Vec<u8> {
     stream
         .set_read_timeout(Some(timeout_dur))
         .expect("set read timeout");
-    read_bytes(stream)
+    read_one_reply(stream)
 }
 
 /// Encodes a single bulk string and returns the bytes (unlike
@@ -177,17 +182,48 @@ fn bulk_bytes(value: &[u8]) -> Vec<u8> {
     out
 }
 
-fn read_bytes(stream: &mut TcpStream) -> Vec<u8> {
+/// Reads exactly one RESP2 reply frame (simple string, error, integer, or
+/// bulk string) using `read_exact`. This returns the moment the frame is
+/// complete — unlike a read-until-timeout loop, which would block for the
+/// full socket read timeout on every command because the server keeps the
+/// connection open.
+fn read_one_reply(stream: &mut TcpStream) -> Vec<u8> {
     let mut out = Vec::new();
-    let mut buf = [0u8; 4096];
-    loop {
-        match stream.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => out.extend_from_slice(&buf[..n]),
-            Err(_) => break,
+    let mut byte = [0u8; 1];
+    if stream.read_exact(&mut byte).is_err() {
+        // Timeout / would-block: no reply available (server not ready).
+        return Vec::new();
+    }
+    out.push(byte[0]);
+    match byte[0] {
+        b'+' | b'-' | b':' => read_until_crlf(stream, &mut out),
+        b'$' => {
+            let mut header = Vec::new();
+            read_until_crlf(stream, &mut header);
+            let header_str =
+                std::str::from_utf8(&header[..header.len() - 2]).expect("ascii length");
+            let len: i64 = header_str.parse().expect("integer length");
+            out.extend_from_slice(&header);
+            if len >= 0 {
+                let mut body = vec![0u8; len as usize + 2];
+                stream.read_exact(&mut body).expect("read bulk body");
+                out.extend_from_slice(&body);
+            }
         }
+        other => panic!("unexpected RESP type byte {other:#x}"),
     }
     out
+}
+
+fn read_until_crlf(stream: &mut TcpStream, out: &mut Vec<u8>) {
+    let mut byte = [0u8; 1];
+    loop {
+        stream.read_exact(&mut byte).expect("read byte");
+        out.push(byte[0]);
+        if out.len() >= 2 && out[out.len() - 2] == b'\r' && out[out.len() - 1] == b'\n' {
+            return;
+        }
+    }
 }
 
 /// Extracts every `SET` key from a compact/raw AOF byte stream.
