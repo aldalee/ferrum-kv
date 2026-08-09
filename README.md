@@ -47,7 +47,11 @@ zero-dependency web dashboard.
   <img src="assets/section-divider.svg" width="80%" alt="" />
 </p>
 
-https://shipthatcode.com/courses/build-redis
+<p align="center">
+  🎓 FerrumKV is built by the author of
+  <a href="https://shipthatcode.com/courses/build-redis"><b>Build Redis from Scratch</b></a>
+  — a step-by-step course on writing a RESP-compatible key-value store.
+</p>
 
 ## Quick Start
 
