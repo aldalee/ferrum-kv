@@ -399,7 +399,7 @@ pub fn execute_command(
         },
         Command::Get { key } => match engine.get(&key) {
             Ok(Some(v)) => encoder::encode_bulk_string(out, &v),
-            Ok(None) => encoder::encode_null_bulk(out),
+            Ok(None) => enc_null(out),
             Err(e) => write_ferrum_error(out, &e),
         },
         Command::Del { keys } => match engine.del_many(&keys) {
@@ -432,11 +432,11 @@ pub fn execute_command(
         },
         Command::Expire { key, seconds } => {
             let reply = expire_reply(engine, &key, checked_seconds_to_ms(seconds));
-            write_bool_integer(out, reply);
+            write_bool_integer(out, reply, version);
         }
         Command::PExpire { key, millis } => {
             let reply = expire_reply(engine, &key, Some(millis));
-            write_bool_integer(out, reply);
+            write_bool_integer(out, reply, version);
         }
         Command::PExpireAt { key, abs_epoch_ms } => match engine.expire_at_ms(&key, abs_epoch_ms) {
             Ok(true) => enc_bool(out, true),
@@ -462,7 +462,7 @@ pub fn execute_command(
         },
         Command::MemoryUsage { key } => match engine.memory_usage(&key) {
             Ok(Some(bytes)) => encoder::encode_integer(out, bytes as i64),
-            Ok(None) => encoder::encode_null_bulk(out),
+            Ok(None) => enc_null(out),
             Err(e) => write_ferrum_error(out, &e),
         },
         Command::Info { section } => {
@@ -471,7 +471,7 @@ pub fn execute_command(
         }
         Command::Config { sub, args } => {
             if sub.eq_ignore_ascii_case(b"GET") {
-                config_get(engine, &args[0], out);
+                config_get(engine, &args[0], out, version);
             } else if sub.eq_ignore_ascii_case(b"SET") {
                 config_set(engine, &args[0], &args[1], out);
             } else {
@@ -696,7 +696,10 @@ fn render_info(engine: &KvEngine, section: Option<&[u8]>) -> String {
 /// just that pair, or an empty array (`*0`) when the name is unknown — matching
 /// Redis' behaviour so clients that probe for an unsupported parameter get a
 /// clean "nothing matched" rather than an error.
-fn config_get(engine: &KvEngine, pattern: &[u8], out: &mut Vec<u8>) {
+///
+/// RESP3 clients receive a native map (`%N`) instead of the flat array, the
+/// same layout Redis uses after a `HELLO 3` handshake.
+fn config_get(engine: &KvEngine, pattern: &[u8], out: &mut Vec<u8>, version: ProtocolVersion) {
     let cfg = match engine.eviction_config() {
         Ok(c) => c,
         Err(e) => return write_ferrum_error(out, &e),
@@ -720,8 +723,14 @@ fn config_get(engine: &KvEngine, pattern: &[u8], out: &mut Vec<u8>) {
             engine.slowlog_max_len().to_string().into_bytes(),
         ),
     ];
+    // Emits the container header: RESP2 array of 2N elements, or RESP3 map
+    // of N pairs.
+    let header = |out: &mut Vec<u8>, pairs: usize| match version {
+        ProtocolVersion::Resp2 => encoder::encode_array_header(out, pairs * 2),
+        ProtocolVersion::Resp3 => encoder::encode_map_header(out, pairs),
+    };
     if pattern.eq_ignore_ascii_case(b"*") {
-        encoder::encode_array_header(out, pairs.len() * 2);
+        header(out, pairs.len());
         for (name, value) in &pairs {
             encoder::encode_bulk_string(out, name.as_bytes());
             encoder::encode_bulk_string(out, value);
@@ -730,17 +739,17 @@ fn config_get(engine: &KvEngine, pattern: &[u8], out: &mut Vec<u8>) {
     }
     let requested = match std::str::from_utf8(pattern) {
         Ok(s) => s,
-        Err(_) => return encoder::encode_array_header(out, 0),
+        Err(_) => return header(out, 0),
     };
     if let Some((name, value)) = pairs
         .iter()
         .find(|(n, _)| n.eq_ignore_ascii_case(requested))
     {
-        encoder::encode_array_header(out, 2);
+        header(out, 1);
         encoder::encode_bulk_string(out, name.as_bytes());
         encoder::encode_bulk_string(out, value);
     } else {
-        encoder::encode_array_header(out, 0);
+        header(out, 0);
     }
 }
 
@@ -905,11 +914,18 @@ fn expire_reply(engine: &KvEngine, key: &[u8], delta_ms: Option<i64>) -> Result<
     engine.expire_at_ms(key, abs_ms)
 }
 
-/// Writes a `Result<bool, _>` as a RESP integer (`0`/`1`) or as an error.
-fn write_bool_integer(out: &mut Vec<u8>, reply: Result<bool, FerrumError>) {
+/// Writes a `Result<bool, _>` as a boolean reply — RESP2 integer (`0`/`1`)
+/// or RESP3 boolean (`#t`/`#f`) — or as an error.
+fn write_bool_integer(
+    out: &mut Vec<u8>,
+    reply: Result<bool, FerrumError>,
+    version: ProtocolVersion,
+) {
     match reply {
-        Ok(true) => encoder::encode_integer(out, 1),
-        Ok(false) => encoder::encode_integer(out, 0),
+        Ok(v) => match version {
+            ProtocolVersion::Resp2 => encoder::encode_integer(out, v as i64),
+            ProtocolVersion::Resp3 => encoder::encode_boolean(out, v),
+        },
         Err(e) => write_ferrum_error(out, &e),
     }
 }

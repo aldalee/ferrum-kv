@@ -253,6 +253,58 @@ mod tests {
         assert_eq!(buf, b"*0\r\n");
     }
 
+    // ── RESP3 typed replies ──────────────────────────────────────────
+
+    #[test]
+    fn null_encodes_resp3_shape() {
+        let mut buf = Vec::new();
+        encode_null(&mut buf);
+        assert_eq!(buf, b"_\r\n");
+    }
+
+    #[test]
+    fn boolean_true_and_false() {
+        let mut buf = Vec::new();
+        encode_boolean(&mut buf, true);
+        assert_eq!(buf, b"#t\r\n");
+
+        buf.clear();
+        encode_boolean(&mut buf, false);
+        assert_eq!(buf, b"#f\r\n");
+    }
+
+    #[test]
+    fn double_roundtrips_value() {
+        let mut buf = Vec::new();
+        encode_double(&mut buf, 3.5);
+        assert_eq!(buf, b",3.5\r\n");
+
+        buf.clear();
+        encode_double(&mut buf, -0.25);
+        assert_eq!(buf, b",-0.25\r\n");
+    }
+
+    #[test]
+    fn double_whole_number_appends_trimmed_zero() {
+        let mut buf = Vec::new();
+        encode_double(&mut buf, 2.0);
+        assert_eq!(buf, b",2.0\r\n");
+    }
+
+    #[test]
+    fn map_header_counts_pairs() {
+        let mut buf = Vec::new();
+        encode_map_header(&mut buf, 4);
+        assert_eq!(buf, b"%4\r\n");
+    }
+
+    #[test]
+    fn map_header_zero() {
+        let mut buf = Vec::new();
+        encode_map_header(&mut buf, 0);
+        assert_eq!(buf, b"%0\r\n");
+    }
+
     #[test]
     fn encoders_can_be_chained_into_one_buffer() {
         // Simulates composing a full reply for a hypothetical multi-element
