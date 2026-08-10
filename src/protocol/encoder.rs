@@ -99,7 +99,6 @@ pub fn encode_boolean(buf: &mut Vec<u8>, v: bool) {
 
 /// Appends a RESP3 Double (`,<value>\r\n`). The value is formatted with
 /// enough precision to round-trip without loss.
-#[allow(dead_code)]
 pub fn encode_double(buf: &mut Vec<u8>, v: f64) {
     buf.push(b',');
     buf.extend_from_slice(format!("{v:.17}").trim_end_matches('0').as_bytes());

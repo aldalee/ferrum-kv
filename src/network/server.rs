@@ -397,6 +397,16 @@ pub fn execute_command(
             Ok(n) => encoder::encode_integer(out, n),
             Err(e) => write_ferrum_error(out, &e),
         },
+        Command::IncrByFloat { key, delta } => match engine.incr_by_float(key, delta) {
+            // RESP2: bulk string (Redis-compatible). RESP3: native double.
+            Ok(n) => match version {
+                ProtocolVersion::Resp2 => {
+                    encoder::encode_bulk_string(out, n.to_string().as_bytes())
+                }
+                ProtocolVersion::Resp3 => encoder::encode_double(out, n),
+            },
+            Err(e) => write_ferrum_error(out, &e),
+        },
         Command::Get { key } => match engine.get(&key) {
             Ok(Some(v)) => encoder::encode_bulk_string(out, &v),
             Ok(None) => enc_null(out),
@@ -466,8 +476,25 @@ pub fn execute_command(
             Err(e) => write_ferrum_error(out, &e),
         },
         Command::Info { section } => {
-            let body = render_info(engine, section.as_deref());
-            encoder::encode_bulk_string(out, body.as_bytes());
+            let sections = render_info_sections(engine, section.as_deref());
+            match version {
+                // RESP2: single concatenated bulk string (Redis-compatible).
+                ProtocolVersion::Resp2 => {
+                    let mut body = String::new();
+                    for (_, text) in &sections {
+                        body.push_str(text);
+                    }
+                    encoder::encode_bulk_string(out, body.as_bytes());
+                }
+                // RESP3: native map of section-name → section-text.
+                ProtocolVersion::Resp3 => {
+                    encoder::encode_map_header(out, sections.len());
+                    for (name, text) in &sections {
+                        encoder::encode_bulk_string(out, name.as_bytes());
+                        encoder::encode_bulk_string(out, text.as_bytes());
+                    }
+                }
+            }
         }
         Command::Config { sub, args } => {
             if sub.eq_ignore_ascii_case(b"GET") {
@@ -629,14 +656,19 @@ fn hello_reply(out: &mut Vec<u8>, version: ProtocolVersion) {
     encoder::encode_bulk_string(out, b"standalone");
 }
 
-fn render_info(engine: &KvEngine, section: Option<&[u8]>) -> String {
+/// Renders the `INFO` reply as an ordered list of `(section_name, text)`
+/// pairs. RESP2 callers concatenate the texts into one bulk string (the
+/// Redis layout); RESP3 callers emit a native map keyed by section name.
+fn render_info_sections(engine: &KvEngine, section: Option<&[u8]>) -> Vec<(&'static str, String)> {
     let wants = |name: &str| match section {
         None => true,
         Some(s) => s.eq_ignore_ascii_case(name.as_bytes()),
     };
 
-    let mut out = String::new();
+    let mut sections: Vec<(&'static str, String)> = Vec::new();
+
     if wants("server") {
+        let mut out = String::new();
         out.push_str("# Server\r\n");
         out.push_str(concat!(
             "ferrum_version:",
@@ -644,10 +676,12 @@ fn render_info(engine: &KvEngine, section: Option<&[u8]>) -> String {
             "\r\n"
         ));
         out.push_str("\r\n");
+        sections.push(("server", out));
     }
     if wants("memory") {
         let used = engine.used_memory();
         let cfg = engine.eviction_config().unwrap_or_default();
+        let mut out = String::new();
         out.push_str("# Memory\r\n");
         out.push_str(&format!("used_memory:{used}\r\n"));
         out.push_str(&format!("maxmemory:{}\r\n", cfg.max_memory));
@@ -660,9 +694,11 @@ fn render_info(engine: &KvEngine, section: Option<&[u8]>) -> String {
         out.push_str(&format!("ahe_alpha:{:.3}\r\n", ahe.alpha));
         out.push_str(&format!("ahe_last_hit_ratio:{:.3}\r\n", ahe.last_hit_ratio));
         out.push_str("\r\n");
+        sections.push(("memory", out));
     }
     if wants("stats") {
         let (hits, misses) = engine.keyspace_stats();
+        let mut out = String::new();
         out.push_str("# Stats\r\n");
         out.push_str(&format!(
             "total_commands_processed:{}\r\n",
@@ -673,9 +709,11 @@ fn render_info(engine: &KvEngine, section: Option<&[u8]>) -> String {
         out.push_str(&format!("evicted_keys:{}\r\n", engine.evicted_keys()));
         out.push_str(&format!("expired_keys:{}\r\n", engine.expired_keys()));
         out.push_str("\r\n");
+        sections.push(("stats", out));
     }
     if wants("keyspace") {
         let keys = engine.dbsize().unwrap_or(0);
+        let mut out = String::new();
         out.push_str("# Keyspace\r\n");
         if keys > 0 {
             let (expires, avg_ttl) = engine.expire_stats().unwrap_or((0, 0));
@@ -684,8 +722,9 @@ fn render_info(engine: &KvEngine, section: Option<&[u8]>) -> String {
             ));
         }
         out.push_str("\r\n");
+        sections.push(("keyspace", out));
     }
-    out
+    sections
 }
 
 /// Produces the reply for `CONFIG GET <param|*>`.

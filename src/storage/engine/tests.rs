@@ -307,6 +307,37 @@ fn incr_by_reports_overflow_as_parse_error() {
 }
 
 #[test]
+fn incr_by_float_initialises_missing_key_from_zero() {
+    let engine = KvEngine::new();
+    assert_eq!(engine.incr_by_float(b"f".to_vec(), 0.5).unwrap(), 0.5);
+    assert_eq!(engine.incr_by_float(b"f".to_vec(), 2.0).unwrap(), 2.5);
+    assert_eq!(engine.get(b"f").unwrap(), Some(b"2.5".to_vec()));
+}
+
+#[test]
+fn incr_by_float_supports_negative_delta() {
+    let engine = KvEngine::new();
+    engine.set(b"k".to_vec(), b"10.5".to_vec()).unwrap();
+    assert_eq!(engine.incr_by_float(b"k".to_vec(), -3.25).unwrap(), 7.25);
+}
+
+#[test]
+fn incr_by_float_rejects_non_numeric_value() {
+    let engine = KvEngine::new();
+    engine.set(b"k".to_vec(), b"not a number".to_vec()).unwrap();
+    let err = engine.incr_by_float(b"k".to_vec(), 1.0).unwrap_err();
+    assert!(matches!(err, FerrumError::ParseError(ref m) if m.contains("float")));
+}
+
+#[test]
+fn incr_by_float_rejects_non_finite_result() {
+    let engine = KvEngine::new();
+    engine.set(b"k".to_vec(), b"1e308".to_vec()).unwrap();
+    let err = engine.incr_by_float(b"k".to_vec(), 1e308).unwrap_err();
+    assert!(matches!(err, FerrumError::ParseError(ref m) if m.contains("NaN")));
+}
+
+#[test]
 fn incr_by_persists_new_integer_to_aof() {
     let path = tmp_aof_path("incrby");
     let (engine, writer) = engine_with_aof(&path);

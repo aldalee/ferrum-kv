@@ -17,6 +17,10 @@ pub enum Command {
     /// `INCR`, `DECR`, `INCRBY`, `DECRBY` — all share the same shape of
     /// atomically adding a signed delta to the integer value at `key`.
     IncrBy { key: Vec<u8>, delta: i64 },
+    /// `INCRBYFLOAT key increment` — atomically adds a floating-point delta
+    /// to the value at `key`. The reply is a bulk string in RESP2 and a
+    /// native double in RESP3.
+    IncrByFloat { key: Vec<u8>, delta: f64 },
     /// `GET key`
     Get { key: Vec<u8> },
     /// `DEL key [key ...]`
@@ -111,6 +115,13 @@ impl Command {
             Command::IncrBy { key, delta } => {
                 vec![
                     b"INCRBY".to_vec(),
+                    key.clone(),
+                    delta.to_string().into_bytes(),
+                ]
+            }
+            Command::IncrByFloat { key, delta } => {
+                vec![
+                    b"INCRBYFLOAT".to_vec(),
                     key.clone(),
                     delta.to_string().into_bytes(),
                 ]
@@ -453,6 +464,15 @@ fn build_command(parts: Vec<Vec<u8>>) -> Result<Command, FerrumError> {
             ))?;
             Ok(Command::IncrBy { key, delta })
         }
+        b"INCRBYFLOAT" => {
+            if args.len() != 2 {
+                return Err(FerrumError::WrongArity { cmd: "INCRBYFLOAT" });
+            }
+            let mut it = args.into_iter();
+            let key = it.next().unwrap();
+            let delta = parse_float_argument(&it.next().unwrap())?;
+            Ok(Command::IncrByFloat { key, delta })
+        }
         b"GET" => {
             if args.len() != 1 {
                 return Err(FerrumError::WrongArity { cmd: "GET" });
@@ -740,6 +760,17 @@ fn parse_integer_argument(bytes: &[u8], _cmd: &'static str) -> Result<i64, Ferru
         .map_err(|_| FerrumError::ParseError("value is not an integer or out of range".into()))?;
     text.parse::<i64>()
         .map_err(|_| FerrumError::ParseError("value is not an integer or out of range".into()))
+}
+
+/// Parses a RESP bulk string argument as an [`f64`], used by `INCRBYFLOAT`.
+///
+/// Non-numeric payloads map to the Redis-standard error message
+/// `value is not a valid float`.
+fn parse_float_argument(bytes: &[u8]) -> Result<f64, FerrumError> {
+    let text = std::str::from_utf8(bytes)
+        .map_err(|_| FerrumError::ParseError("value is not a valid float".into()))?;
+    text.parse::<f64>()
+        .map_err(|_| FerrumError::ParseError("value is not a valid float".into()))
 }
 
 #[cfg(test)]

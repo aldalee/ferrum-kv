@@ -574,6 +574,43 @@ impl KvEngine {
         Ok(new_value)
     }
 
+    /// Atomically adds `delta` to the floating-point value at `key` and
+    /// returns the new value, matching Redis' `INCRBYFLOAT` semantics.
+    ///
+    /// A missing key is treated as starting from zero. The existing value,
+    /// if any, must be a decimal ASCII float that parses into an [`f64`];
+    /// values that fail to parse produce the Redis-standard reply
+    /// `-ERR value is not a valid float`.
+    ///
+    /// The key's existing TTL, if any, is preserved.
+    pub fn incr_by_float(&self, key: Vec<u8>, delta: f64) -> Result<f64, FerrumError> {
+        validate_key(&key)?;
+        let mut g = WriteGuard::begin(self)?;
+        let (current, existing_deadline) = match g.read_state(&key) {
+            Some((data, ttl)) => {
+                let text = std::str::from_utf8(&data)
+                    .map_err(|_| FerrumError::ParseError("value is not a valid float".into()))?;
+                let n = text
+                    .parse::<f64>()
+                    .map_err(|_| FerrumError::ParseError("value is not a valid float".into()))?;
+                (n, ttl)
+            }
+            None => (0f64, None),
+        };
+
+        let new_value = current + delta;
+        // Reject non-finite results the same way Redis does (the sum
+        // overflowed to infinity / NaN).
+        if !new_value.is_finite() {
+            return Err(FerrumError::ParseError(
+                "increment would produce NaN or Infinity".into(),
+            ));
+        }
+        let serialised = new_value.to_string().into_bytes();
+        g.insert_keep_ttl(key, serialised, existing_deadline)?;
+        Ok(new_value)
+    }
+
     /// Returns the value for `key`, or `None` if the key does not exist.
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, FerrumError> {
         let mut g = WriteGuard::begin(self)?;

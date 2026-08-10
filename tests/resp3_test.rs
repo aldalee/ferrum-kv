@@ -197,6 +197,42 @@ fn resp3_config_get_returns_map() {
 }
 
 #[test]
+fn resp3_incrbyfloat_returns_double() {
+    let server = spawn_server();
+    let mut s = connect_resp3(&server.addr);
+
+    assert_eq!(send(&mut s, &[b"SET", b"f", b"1.5"]), b"+OK\r\n");
+    // RESP3 INCRBYFLOAT → native double.
+    let reply = send(&mut s, &[b"INCRBYFLOAT", b"f", b"2.25"]);
+    assert_eq!(reply, b",3.75\r\n", "RESP3 INCRBYFLOAT must be a double");
+
+    server.shutdown();
+}
+
+#[test]
+fn resp3_info_returns_map() {
+    let server = spawn_server();
+    let mut s = connect_resp3(&server.addr);
+
+    let reply = send(&mut s, &[b"INFO"]);
+    // Four sections (server, memory, stats, keyspace) → `%4\r\n` map header.
+    assert!(
+        reply.starts_with(b"%4\r\n"),
+        "RESP3 INFO must be a 4-pair map, got {:?}",
+        String::from_utf8_lossy(&reply)
+    );
+    let text = String::from_utf8_lossy(&reply);
+    assert!(text.contains("server"), "map should include server: {text}");
+    assert!(text.contains("stats"), "map should include stats: {text}");
+    assert!(
+        text.contains("keyspace"),
+        "map should include keyspace: {text}"
+    );
+
+    server.shutdown();
+}
+
+#[test]
 fn resp2_clients_keep_classic_encodings() {
     let server = spawn_server();
     let mut s = connect(&server.addr); // no HELLO → RESP2 default
@@ -214,6 +250,32 @@ fn resp2_clients_keep_classic_encodings() {
         reply.starts_with(b"*12\r\n"),
         "RESP2 CONFIG GET * must start with *12 array, got {:?}",
         String::from_utf8_lossy(&reply)
+    );
+
+    // INCRBYFLOAT stays a bulk string.
+    assert_eq!(send(&mut s, &[b"SET", b"f", b"1"]), b"+OK\r\n");
+    let reply = send(&mut s, &[b"INCRBYFLOAT", b"f", b"0.5"]);
+    assert!(
+        reply.starts_with(b"$"),
+        "RESP2 INCRBYFLOAT must be a bulk string, got {:?}",
+        String::from_utf8_lossy(&reply)
+    );
+    assert!(
+        String::from_utf8_lossy(&reply).contains("1.5"),
+        "RESP2 INCRBYFLOAT payload should be 1.5, got {:?}",
+        String::from_utf8_lossy(&reply)
+    );
+
+    // INFO stays a single bulk string.
+    let reply = send(&mut s, &[b"INFO"]);
+    assert!(
+        reply.starts_with(b"$"),
+        "RESP2 INFO must be a bulk string, got {:?}",
+        String::from_utf8_lossy(&reply)
+    );
+    assert!(
+        String::from_utf8_lossy(&reply).contains("# Server"),
+        "RESP2 INFO should contain the Server section"
     );
 
     server.shutdown();
