@@ -151,11 +151,11 @@ AHE's differentiation from AdaptiveClimb is **real by construction**: **AHE inco
 
 | ID | Feature | Effort | Rationale |
 |----|---------|--------|-----------|
-| P-01 | `HELLO 3` handshake | 2 days | RESP3 negotiation. Fall back to RESP2 for clients that don't request it. |
-| P-02 | RESP3 typed replies | 3 days | Map types, set types, double, boolean, null, push messages. The encoder gains typed variants. |
+| ✅ P-01 | `HELLO 3` handshake | 2 days | RESP3 negotiation. Fall back to RESP2 for clients that don't request it. **(done v0.6.0)** |
+| ✅ P-02 | RESP3 typed replies | 3 days | Map types, set types, double, boolean, null, push messages. The encoder gains typed variants. **(done v0.6.0: null, boolean, double, map; INCRBYFLOAT)** |
 | P-03 | RESP3 push for Pub/Sub | 2 days | If/when Pub/Sub is implemented, RESP3 push messages enable multiplexed subscriptions on a single connection. |
 | P-04 | Client-side caching (basic) | 3 days | RESP3 `CLIENT TRACKING` — basic invalidation push. |
-| P-05 | RESP2 backward compat | 1 day | Ensure all existing RESP2 clients continue to work. |
+| ✅ P-05 | RESP2 backward compat | 1 day | Ensure all existing RESP2 clients continue to work. **(done v0.6.0)** |
 
 **Why RESP3 before data types**: The protocol is foundational. Adding List/Hash types over RESP2 is fine, but RESP3 enables client-side caching, push messages, and richer type representations (native doubles, booleans, maps) that make the type system coherent. Do protocol first, then types.
 

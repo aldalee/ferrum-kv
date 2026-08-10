@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/phaethix/ferrum-kv/releases"><img src="https://img.shields.io/badge/release-v0.5.3-blue" alt="Release" /></a>
+  <a href="https://github.com/phaethix/ferrum-kv/releases"><img src="https://img.shields.io/badge/release-v0.6.0-blue" alt="Release" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License" /></a>
   <a href="https://github.com/phaethix/ferrum-kv/actions/workflows/ci.yml"><img src="https://github.com/phaethix/ferrum-kv/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/rust-1.85%2B-orange" alt="Rust 1.85+" />
@@ -299,6 +299,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions and review process.
 | v0.5.1 | CONFIG SET/GET, AUTH requirepass; SIEVE, SIEVE-S, AdaptiveClimb, AHE TTL-aware eviction, benchmark suite |
 | v0.5.2 | SLOWLOG, AOF REWRITE / BGREWRITEAOF |
 | v0.5.3 | MONITOR, INFO fields expansion, WriteGuard refactor |
+| v0.6.0 | RESP3 protocol: HELLO handshake, typed replies (null/boolean/double/map), INCRBYFLOAT |
 | v0.6 | RESP3 protocol, typed replies, client-side caching |
 | v0.7 | List, Hash, Set data types |
 
